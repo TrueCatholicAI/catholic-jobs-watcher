@@ -12,7 +12,12 @@ from anthropic import Anthropic
 log = logging.getLogger(__name__)
 
 MODEL = "claude-haiku-4-5-20251001"
-DESC_MAX = 2500
+# 5000 chars covers the "back half" of most postings — mission/values
+# language (e.g. "Familiarity with the Catholic market is a plus" on
+# the Ascension PM role at char 4060) routinely sits past 2500. Token
+# cost stays trivial at Haiku rates: ~1250 input tokens/posting × <100
+# postings/day ≈ pennies/month.
+DESC_MAX = 5000
 
 # Cheap pre-filter: senior level AND design/product/UX keywords.
 # Intentionally loose — Haiku does the real filtering.
