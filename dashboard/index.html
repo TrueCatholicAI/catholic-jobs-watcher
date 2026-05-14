@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Catholic Jobs Watcher</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="border-b bg-white">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <h1 class="text-xl font-semibold">Catholic Jobs Watcher</h1>
+      <nav class="flex gap-2 text-sm">
+        <button class="tab px-3 py-1.5 rounded-md bg-slate-900 text-white" data-view="active">Active</button>
+        <button class="tab px-3 py-1.5 rounded-md text-slate-600 hover:bg-slate-100" data-view="history">All history</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <section id="auth-gate" class="hidden bg-white p-6 rounded-lg shadow-sm border max-w-md mx-auto mt-12">
+      <h2 class="text-lg font-semibold mb-2">Access required</h2>
+      <p class="text-sm text-slate-600 mb-4">Paste the dashboard secret to view postings.</p>
+      <input id="secret-input" type="password" class="w-full border rounded-md px-3 py-2 mb-3" placeholder="Dashboard secret" />
+      <button id="secret-submit" class="w-full bg-slate-900 text-white rounded-md px-3 py-2">Unlock</button>
+      <p id="secret-error" class="text-sm text-red-600 mt-2 hidden">Incorrect secret.</p>
+    </section>
+
+    <section id="stats-bar" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div class="bg-white p-4 rounded-lg border">
+        <div class="text-xs uppercase text-slate-500">Total scored</div>
+        <div id="stat-total" class="text-2xl font-semibold">—</div>
+      </div>
+      <div class="bg-white p-4 rounded-lg border">
+        <div class="text-xs uppercase text-slate-500">Active matches</div>
+        <div id="stat-active" class="text-2xl font-semibold">—</div>
+      </div>
+      <div class="bg-white p-4 rounded-lg border">
+        <div class="text-xs uppercase text-slate-500">Last 7 days</div>
+        <div id="stat-week" class="text-2xl font-semibold">—</div>
+      </div>
+      <div class="bg-white p-4 rounded-lg border">
+        <div class="text-xs uppercase text-slate-500">Top company (90d)</div>
+        <div id="stat-top-company" class="text-base font-medium truncate">—</div>
+      </div>
+    </section>
+
+    <section id="filters" class="bg-white p-4 rounded-lg border mb-4 hidden">
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+        <div>
+          <label class="text-xs uppercase text-slate-500 block mb-1">Company</label>
+          <select id="filter-company" class="w-full border rounded-md px-2 py-1.5 text-sm">
+            <option value="">All</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs uppercase text-slate-500 block mb-1">Min fit score</label>
+          <div class="flex items-center gap-2">
+            <input id="filter-score" type="range" min="1" max="10" value="1" class="flex-1" />
+            <span id="filter-score-val" class="text-sm w-6 text-right">1</span>
+          </div>
+        </div>
+        <div>
+          <label class="text-xs uppercase text-slate-500 block mb-1">Status</label>
+          <select id="filter-status" class="w-full border rounded-md px-2 py-1.5 text-sm">
+            <option value="">All</option>
+            <option value="new">New</option>
+            <option value="starred">Starred</option>
+            <option value="applied">Applied</option>
+            <option value="dismissed">Dismissed</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs uppercase text-slate-500 block mb-1">Search</label>
+          <input id="filter-query" type="text" placeholder="Title / company" class="w-full border rounded-md px-2 py-1.5 text-sm" />
+        </div>
+      </div>
+    </section>
+
+    <section id="list-wrap" class="bg-white rounded-lg border">
+      <div id="list-empty" class="p-8 text-center text-slate-500 text-sm hidden">No matches yet.</div>
+      <ul id="list" class="divide-y"></ul>
+    </section>
+  </main>
+
+  <footer class="max-w-6xl mx-auto px-4 py-6 text-xs text-slate-500">
+    Built with Claude · <a href="https://github.com/TrueCatholicAI/catholic-jobs-watcher" class="underline">source</a>
+  </footer>
+
+  <script type="module" src="./config.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
