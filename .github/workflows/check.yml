@@ -1,0 +1,54 @@
+name: catholic-jobs-watch
+
+on:
+  schedule:
+    - cron: '0 13 * * *'   # 13:00 UTC = ~8am ET
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Fetch + pre-filter only (no DB, no email)"
+        type: boolean
+        default: false
+      skip_notify:
+        description: "Score + store but do not send email"
+        type: boolean
+        default: false
+      cap:
+        description: "Cap digest size (cold-start safety, e.g. 5)"
+        type: string
+        default: ""
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'watcher/requirements.txt'
+
+      - name: Install Python deps
+        run: pip install -r watcher/requirements.txt
+
+      - name: Install Playwright (chromium)
+        run: playwright install --with-deps chromium
+
+      - name: Run watcher
+        env:
+          GEMINI_API_KEY:        ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY:        ${{ secrets.RESEND_API_KEY }}
+          NOTIFY_EMAIL:          ${{ secrets.NOTIFY_EMAIL }}
+          RESEND_FROM:           ${{ vars.RESEND_FROM }}
+          DASHBOARD_URL:         ${{ vars.DASHBOARD_URL }}
+        run: |
+          ARGS=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          if [ "${{ github.event.inputs.skip_notify }}" = "true" ]; then ARGS="$ARGS --skip-notify"; fi
+          if [ -n "${{ github.event.inputs.cap }}" ]; then ARGS="$ARGS --cap ${{ github.event.inputs.cap }}"; fi
+          python -m watcher.main $ARGS
