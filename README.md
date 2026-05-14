@@ -1,9 +1,9 @@
 # Catholic Jobs Watcher
 
 A scheduled job watcher that finds senior UX / product / design roles at
-genuinely Catholic organizations, scores each posting with Claude Haiku
-for fit, dedupes via Supabase, and notifies via daily email digest + a
-dashboard.
+genuinely Catholic organizations, scores each posting with Google
+Gemini 2.0 Flash (free tier) for fit, dedupes via Supabase, and notifies
+via daily email digest + a dashboard.
 
 ## What it does
 
@@ -13,10 +13,10 @@ Every morning at 13:00 UTC (~8am ET), GitHub Actions runs the watcher:
    (Greenhouse / Lever / Ashby / Workable), RSS feeds (Indeed), and
    eventual custom scrapers.
 2. **Pre-filter** by title regex (level keyword × discipline keyword) so
-   we don't burn Haiku tokens on obviously off-target postings.
+   we don't burn LLM quota on obviously off-target postings.
 3. **Dedupe** against Supabase by `(source, posting_id)`.
-4. **Score** each new posting with `claude-haiku-4-5-20251001` using a
-   structured tool-use call returning `{catholic_aligned,
+4. **Score** each new posting with `gemini-2.0-flash` using
+   `response_schema` for guaranteed JSON returning `{catholic_aligned,
    senior_design_or_product, remote_or_indiana, fit_score, fit_reason}`.
 5. **Store** every scored posting (so we have history).
 6. **Email** a digest via Resend if any posting is Catholic-aligned,
@@ -41,7 +41,7 @@ catholic-jobs-watcher/
 ├── watcher/                     # Python job
 │   ├── sources.py               # source registry
 │   ├── fetchers.py              # ATS / RSS / scrape clients
-│   ├── scorer.py                # Haiku fit scoring
+│   ├── scorer.py                # Gemini fit scoring
 │   ├── notifier.py              # Resend digest
 │   ├── state.py                 # Supabase read/write
 │   ├── main.py                  # orchestrator (CLI entrypoint)
@@ -69,7 +69,8 @@ in Resend and set the `RESEND_FROM` Actions Variable below (e.g.
 
 **Repository Secrets** (sensitive, never exposed to client):
 
-- `ANTHROPIC_API_KEY` — Anthropic API key for Haiku scoring
+- `GEMINI_API_KEY` — Google AI Studio API key for Gemini scoring.
+  Get a free one (no card required) at https://aistudio.google.com/apikey
 - `SUPABASE_URL` — TCAI Supabase project URL
 - `SUPABASE_SERVICE_KEY` — TCAI service-role key (server-only; bypasses RLS)
 - `RESEND_API_KEY` — Resend API key
@@ -177,7 +178,7 @@ playwright install chromium
 python -m watcher.main --dry-run -v
 
 # Full pass (needs env vars)
-export ANTHROPIC_API_KEY=...
+export GEMINI_API_KEY=...
 export SUPABASE_URL=...
 export SUPABASE_SERVICE_KEY=...
 export RESEND_API_KEY=...
@@ -198,8 +199,10 @@ python -m watcher.main --cap 5 -v         # cold-start safe
 
 ## Cost
 
-- Anthropic Haiku: <100 scoring calls/day at the prefilter rate ≈ a
-  few cents/month.
+- Gemini 2.0 Flash: free tier (1500 req/day, 15 RPM). Watcher uses
+  <100 calls/day at the prefilter rate, so **$0/month** with no credit
+  card on file. The 4.5s inter-call sleep in `main.py` keeps us under
+  the RPM limit even at burst-cold-start volumes.
 - Supabase: trivial; reuses the existing TCAI project.
 - Resend: free tier covers daily digests.
 - GitHub Actions: well within the free tier (cron + a small dashboard

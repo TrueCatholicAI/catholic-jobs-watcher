@@ -6,6 +6,7 @@ import argparse
 import logging
 import os
 import sys
+import time
 from typing import Any
 
 from . import fetchers, notifier, scorer, sources, state
@@ -67,12 +68,19 @@ def run(
     stats["new"] = len(new_postings)
     log.info("dedup: %d new (of %d prefiltered)", len(new_postings), len(passed))
 
-    anthropic_client = None
+    llm_client = None
     if new_postings:
-        anthropic_client = scorer._client()
+        llm_client = scorer._client()
 
-    for posting in new_postings:
-        score = scorer.score_posting(posting, client=anthropic_client)
+    # Gemini free tier is 15 RPM; 4.5s between calls = 13.3 RPM, safely
+    # under the limit even if the first request lands at second 0 of
+    # the rate window.
+    rate_sleep = 4.5
+
+    for i, posting in enumerate(new_postings):
+        if i > 0:
+            time.sleep(rate_sleep)
+        score = scorer.score_posting_with_retry(posting, client=llm_client)
         if score is not None:
             stats["scored"] += 1
         inserted = state.insert_scored(db, posting, score)
@@ -110,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Fail fast on missing required env (except in --dry-run, which doesn't need DB/email).
     if not args.dry_run:
-        missing = [k for k in ("SUPABASE_URL", "SUPABASE_SERVICE_KEY", "ANTHROPIC_API_KEY") if not os.environ.get(k)]
+        missing = [k for k in ("SUPABASE_URL", "SUPABASE_SERVICE_KEY", "GEMINI_API_KEY") if not os.environ.get(k)]
         if missing:
             log.error("missing required env: %s", ", ".join(missing))
             return 2
