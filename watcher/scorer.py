@@ -95,11 +95,20 @@ def _client() -> Anthropic:
 def score_posting(posting: dict[str, Any], client: Anthropic | None = None) -> dict[str, Any] | None:
     """Score one posting. Returns the structured tool output dict or None on failure."""
     client = client or _client()
-    desc = (posting.get("description") or "")[:DESC_MAX]
+    location = (posting.get("location") or "").strip()
+    raw_desc = (posting.get("description") or "").strip()
+    # Prepend the structured location to the description body so it
+    # survives the 2500-char truncation and Haiku weighs it for
+    # remote_or_indiana even when the body text itself doesn't mention
+    # location (common with ATS feeds that ship location in metadata
+    # but not in the description). The dedicated Location: line in the
+    # prompt is kept too — duplication is cheap insurance.
+    combined = f"Location: {location}\n\n{raw_desc}" if location else raw_desc
+    desc = combined[:DESC_MAX]
     prompt = PROMPT.format(
         title=posting.get("title") or "",
         company=posting.get("company") or "",
-        location=posting.get("location") or "",
+        location=location,
         description=desc,
     )
 

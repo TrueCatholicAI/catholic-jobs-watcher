@@ -47,8 +47,13 @@ ATS_SOURCES = [
     # (none yet)
 
     # --- Workable ---
+    # Use the full brand "Ascension Press" — the short form "Ascension"
+    # is ambiguous (Ascension Health is a separate, non-Catholic-defining
+    # enterprise) and Haiku needs the disambiguation since the Catholic
+    # mission language doesn't appear in their Workable description until
+    # past the 2500-char DESC_MAX truncation window.
     {"name": "workable:ascension", "provider": "workable",
-     "slug": "ascension-publishing-group", "company": "Ascension"},
+     "slug": "ascension-publishing-group", "company": "Ascension Press"},
 
     # --- Rippling-ATS (HiringThing) ---
     {"name": "rippling:wordonfire", "provider": "rippling",

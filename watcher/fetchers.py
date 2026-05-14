@@ -187,10 +187,28 @@ def fetch_workable(slug: str, source_name: str, company: str) -> list[dict[str, 
             loc = physical
         shortcode = job.get("shortcode") or ""
         url_job = f"https://apply.workable.com/{slug}/j/{shortcode}/" if shortcode else ""
-        # The list endpoint returns title + location only — descriptions
-        # require a follow-up call. Workable rate-limits aggressively, so
-        # we skip the per-job hydration and rely on title for prefilter;
-        # Haiku gets a short context but that's acceptable.
+
+        # The v3 list endpoint returns title + location only — no description.
+        # Hydrate via the v1 per-job endpoint, which returns the full HTML
+        # body. Worth the extra request: without body context, Haiku can't
+        # reliably tell e.g. "Ascension" the Catholic publisher from
+        # "Ascension" the healthcare system.
+        description_html = ""
+        if shortcode:
+            try:
+                hydrate = httpx.get(
+                    f"https://apply.workable.com/api/v1/accounts/{slug}/jobs/{shortcode}",
+                    timeout=HTTP_TIMEOUT,
+                    headers={"User-Agent": UA, "Accept": "application/json"},
+                )
+                if hydrate.status_code == 200:
+                    j2 = hydrate.json()
+                    description_html = " ".join(
+                        s for s in (j2.get("description"), j2.get("requirements"), j2.get("benefits")) if s
+                    )
+            except Exception as exc:  # noqa: BLE001
+                log.info("workable %s hydrate failed for %s: %s", slug, shortcode, exc)
+
         out.append({
             "source": source_name,
             "posting_id": str(job.get("id") or shortcode),
@@ -198,7 +216,7 @@ def fetch_workable(slug: str, source_name: str, company: str) -> list[dict[str, 
             "company": company,
             "location": loc,
             "url": url_job,
-            "description": html_to_text(job.get("description") or job.get("snippet") or ""),
+            "description": html_to_text(description_html),
             "raw": job,
         })
     return out
