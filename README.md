@@ -112,12 +112,16 @@ all of it. To avoid a 200-posting digest, do one of these on first run:
 
 ## Adding a new source
 
-### ATS (Greenhouse / Lever / Ashby / Workable) — one line
+### ATS (Greenhouse / Lever / Ashby / Workable / Rippling) — one line
 
 1. Find the org's careers page; view source / inspect network traffic
    to identify the ATS provider and slug. Examples:
-   - Greenhouse: `boards.greenhouse.io/<slug>` → slug is "<slug>"
-   - Lever: `jobs.lever.co/<slug>` → slug is "<slug>"
+   - Greenhouse: `boards.greenhouse.io/<slug>` → slug is `<slug>`
+   - Lever: `jobs.lever.co/<slug>` → slug is `<slug>`
+   - Ashby: `jobs.ashbyhq.com/<slug>` → slug is `<slug>`
+   - Workable: apply links `apply.workable.com/<slug>/j/<code>/`
+     or `<slug>@jobs.workablemail.com`
+   - Rippling: `<slug>.rippling-ats.com` → slug is `<slug>`
 2. Append an entry to `ATS_SOURCES` in `watcher/sources.py`:
 
    ```python
@@ -126,6 +130,26 @@ all of it. To avoid a 200-posting digest, do one of these on first run:
    ```
 
 3. Commit, push. Next scheduled run picks it up.
+
+### Currently-seeded sources
+
+ATS-backed (direct):
+- **Word on Fire** — Rippling-ATS (RSS-based)
+- **Ascension Press** — Workable (`ascension-publishing-group`)
+
+Aggregators:
+- **Indeed RSS** — Catholic-tagged senior UX/PM/Design search
+- **jobsforcatholics.com** — Catholic-specific aggregator (JSON-LD scrape)
+
+Known-but-skipped (enterprise HR systems or anti-bot blocks — senior
+postings should still surface via the aggregators):
+- **Hallow** — Gem (jobs.gem.com/hallow). JS-only SPA, no public API;
+  needs Playwright.
+- **Augustine Institute / Formed** — ADP WorkforceNow. No public JSON.
+- **FOCUS** — careers page Cloudflare-blocks scrapers.
+- **Catholic Relief Services** — careers page Cloudflare-blocks scrapers.
+- **Knights of Columbus** — SAP SuccessFactors (`career41.sapsf.com`).
+- **Catholic Charities USA** — federation only, no central ATS.
 
 ### RSS
 

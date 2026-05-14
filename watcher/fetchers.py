@@ -175,10 +175,22 @@ def fetch_workable(slug: str, source_name: str, company: str) -> list[dict[str, 
         return []
 
     for job in payload.get("results", []):
-        loc_parts = [job.get("city"), job.get("state"), job.get("country")]
-        loc = ", ".join(p for p in loc_parts if p) or ("Remote" if job.get("remote") else "")
+        loc_obj = job.get("location") or {}
+        loc_parts = [loc_obj.get("city"), loc_obj.get("region"), loc_obj.get("country")]
+        physical = ", ".join(p for p in loc_parts if p)
+        is_remote = bool(job.get("remote")) or job.get("workplace") == "remote"
+        if is_remote and physical:
+            loc = f"Remote ({physical})"
+        elif is_remote:
+            loc = "Remote"
+        else:
+            loc = physical
         shortcode = job.get("shortcode") or ""
         url_job = f"https://apply.workable.com/{slug}/j/{shortcode}/" if shortcode else ""
+        # The list endpoint returns title + location only — descriptions
+        # require a follow-up call. Workable rate-limits aggressively, so
+        # we skip the per-job hydration and rely on title for prefilter;
+        # Haiku gets a short context but that's acceptable.
         out.append({
             "source": source_name,
             "posting_id": str(job.get("id") or shortcode),
@@ -186,8 +198,52 @@ def fetch_workable(slug: str, source_name: str, company: str) -> list[dict[str, 
             "company": company,
             "location": loc,
             "url": url_job,
-            "description": html_to_text(job.get("description") or ""),
+            "description": html_to_text(job.get("description") or job.get("snippet") or ""),
             "raw": job,
+        })
+    return out
+
+
+def fetch_rippling(slug: str, source_name: str, company: str) -> list[dict[str, Any]]:
+    """Rippling-ATS boards expose a clean RSS at /api/rss.xml per company.
+
+    Rich HTML descriptions are nested in <media:description type="html"><![CDATA[...]]>.
+    The unauthenticated JSON API requires login; RSS is the supported public path.
+    """
+    url = f"https://{slug}.rippling-ats.com/api/rss.xml"
+    out: list[dict[str, Any]] = []
+    try:
+        r = httpx.get(url, timeout=HTTP_TIMEOUT, headers={"User-Agent": UA, "Accept": "application/xml"})
+        if r.status_code == 404:
+            log.warning("rippling %s: board not found", slug)
+            return []
+        r.raise_for_status()
+        root = ET.fromstring(r.text)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("rippling %s fetch failed: %s", slug, exc)
+        return []
+
+    ns = {"media": "http://search.yahoo.com/mrss/"}
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        # custom non-standard <location> tag
+        location = (item.findtext("location") or "").strip()
+        # prefer the richer media:description (HTML), fall back to <description>
+        media_desc = item.find("media:description", ns)
+        body_html = (media_desc.text if media_desc is not None and media_desc.text else item.findtext("description")) or ""
+        # Posting ID = the numeric segment from /job/<id>/<slug>
+        m = re.search(r"/job/(\d+)/", link)
+        posting_id = m.group(1) if m else hash_id(source_name, link, title)
+        out.append({
+            "source": source_name,
+            "posting_id": posting_id,
+            "title": title,
+            "company": company,
+            "location": location,
+            "url": link,
+            "description": html_to_text(body_html),
+            "raw": {"title": title, "link": link, "location": location, "description_html": body_html},
         })
     return out
 
@@ -197,6 +253,7 @@ _ATS_DISPATCH = {
     "lever":      fetch_lever,
     "ashby":      fetch_ashby,
     "workable":   fetch_workable,
+    "rippling":   fetch_rippling,
 }
 
 
@@ -264,7 +321,75 @@ def fetch_scrape(source: dict[str, Any]) -> list[dict[str, Any]]:
         return []
 
 
-# Example skeleton for a future Playwright-based scraper:
+def fetch_jobsforcatholics(source: dict[str, Any]) -> list[dict[str, Any]]:
+    """Catholic-specific aggregator. The site's /jobs/search returns the
+    latest ~20 postings as plain HTML (ignores query params for filtering),
+    and each /job/<id>/<slug> detail page has full schema.org JSON-LD.
+
+    Pulling 20 a day, deduping in Supabase, and letting Haiku filter is
+    cheaper than trying to coax their broken filter params into working.
+    """
+    import json as _json
+
+    list_url = "https://www.jobsforcatholics.com/jobs/search"
+    out: list[dict[str, Any]] = []
+    try:
+        r = httpx.get(list_url, timeout=HTTP_TIMEOUT, headers={"User-Agent": UA})
+        r.raise_for_status()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("jobsforcatholics list fetch failed: %s", exc)
+        return []
+
+    # Pull unique job links: /job/<id>/<slug>/<city>/<state>
+    paths = sorted(set(re.findall(r'href="(/job/[a-z0-9]+/[^"]+)"', r.text)))
+    log.info("jobsforcatholics: %d unique listings on search page", len(paths))
+
+    for path in paths:
+        url = f"https://www.jobsforcatholics.com{path}"
+        try:
+            d = httpx.get(url, timeout=HTTP_TIMEOUT, headers={"User-Agent": UA})
+            d.raise_for_status()
+        except Exception as exc:  # noqa: BLE001
+            log.info("jobsforcatholics detail failed for %s: %s", path, exc)
+            continue
+
+        m = re.search(r'<script type="application/ld\+json">(.*?)</script>', d.text, re.DOTALL)
+        if not m:
+            continue
+        try:
+            ld = _json.loads(m.group(1))
+        except Exception:  # noqa: BLE001
+            continue
+
+        if ld.get("@type") != "JobPosting":
+            continue
+
+        identifier = ld.get("identifier") or {}
+        posting_id = (identifier.get("value") if isinstance(identifier, dict) else None) or path.split("/")[2]
+
+        org = ld.get("hiringOrganization") or {}
+        company = org.get("name") if isinstance(org, dict) else None
+
+        loc_obj = ld.get("jobLocation") or {}
+        addr = (loc_obj.get("address") if isinstance(loc_obj, dict) else None) or {}
+        loc_parts = [addr.get("addressLocality"), addr.get("addressRegion")] if isinstance(addr, dict) else []
+        location = ", ".join(p for p in loc_parts if p)
+
+        out.append({
+            "source": source["name"],
+            "posting_id": posting_id,
+            "title": (ld.get("title") or "").strip(),
+            "company": (company or "").strip(),
+            "location": location,
+            "url": url,
+            "description": html_to_text(ld.get("description") or ""),
+            "raw": ld,
+        })
+    return out
+
+
+# Example skeleton for a future Playwright-based scraper. Use this for
+# orgs whose ATS requires JS execution (e.g. Hallow on Gem, EWTN):
 #
 # def fetch_ewtn(source: dict[str, Any]) -> list[dict[str, Any]]:
 #     from playwright.sync_api import sync_playwright

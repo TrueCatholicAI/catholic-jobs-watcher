@@ -8,33 +8,57 @@ provider and slug. That's it.
 
 Adding a new scraper: write a fetch_<name>() in fetchers.py, then
 register it here under SCRAPE_SOURCES.
+
+----------------------------------------------------------------------
+ATS assignments confirmed by investigation (2026-05-14)
+----------------------------------------------------------------------
+  Hallow                    → Gem (jobs.gem.com/hallow) — SPA, no public
+                              API; needs Playwright. DEFERRED.
+  Word on Fire              → Rippling-ATS (HiringThing under the hood);
+                              public RSS at /api/rss.xml per board.
+  Ascension Press           → Workable; slug "ascension-publishing-group".
+
+ATS-backed (still to investigate):
+  Augustine Institute / Formed → ADP WorkforceNow (enterprise; no public
+                                 JSON board). Aggregators only.
+  FOCUS                        → careers page Cloudflare-blocks scrapers.
+                                 Aggregators only.
+  Catholic Relief Services     → careers page Cloudflare-blocks scrapers.
+                                 Aggregators only.
+  Knights of Columbus          → SAP SuccessFactors (career41.sapsf.com).
+                                 Enterprise; aggregators only.
+  Catholic Charities USA       → No central ATS — federation of member
+                                 orgs each running their own HR system.
+                                 Aggregators only.
+
+For everything in the "aggregators only" bucket, senior postings still
+get caught via Indeed RSS, jobsforcatholics.com, and CatholicJobs.com.
 """
 
 ATS_SOURCES = [
     # --- Greenhouse ---
-    {"name": "greenhouse:hallow",          "provider": "greenhouse", "slug": "hallow",            "company": "Hallow"},
-    {"name": "greenhouse:wordonfire",      "provider": "greenhouse", "slug": "wordonfire",        "company": "Word on Fire"},
-    {"name": "greenhouse:ascensionpress",  "provider": "greenhouse", "slug": "ascensionpress",    "company": "Ascension"},
-    {"name": "greenhouse:augustine",       "provider": "greenhouse", "slug": "augustineinstitute","company": "Augustine Institute / Formed"},
-    {"name": "greenhouse:focus",           "provider": "greenhouse", "slug": "focus",             "company": "FOCUS"},
-    {"name": "greenhouse:crs",             "provider": "greenhouse", "slug": "catholicreliefservices", "company": "Catholic Relief Services"},
-    {"name": "greenhouse:knightsofcolumbus","provider": "greenhouse","slug": "knightsofcolumbus", "company": "Knights of Columbus"},
-    {"name": "greenhouse:catholiccharitiesusa","provider":"greenhouse","slug":"catholiccharitiesusa","company":"Catholic Charities USA"},
+    # (no confirmed Catholic-org Greenhouse boards yet — list left empty
+    # rather than seeded with guesses)
 
     # --- Lever ---
-    # (placeholders — drop in if/when we find an org using Lever)
+    # (none yet)
 
     # --- Ashby ---
-    # (placeholders)
+    # (none yet)
 
     # --- Workable ---
-    # (placeholders)
+    {"name": "workable:ascension", "provider": "workable",
+     "slug": "ascension-publishing-group", "company": "Ascension"},
+
+    # --- Rippling-ATS (HiringThing) ---
+    {"name": "rippling:wordonfire", "provider": "rippling",
+     "slug": "word-on-fire", "company": "Word on Fire"},
 ]
 
 RSS_SOURCES = [
     {
         "name": "rss:indeed-catholic-senior",
-        "company": None,  # populated per-item from feed
+        "company": None,  # parsed per-item from feed title
         "url": (
             "https://www.indeed.com/rss?"
             "q=%22catholic%22+%28ux+OR+%22product+design%22+OR+%22product+management%22%29"
@@ -43,25 +67,45 @@ RSS_SOURCES = [
     },
 ]
 
-# Custom scrapers (Playwright or httpx + HTML parsing).
+# Custom scrapers (Playwright or httpx + HTML/JSON-LD parsing).
 # Each entry maps to a fetch_<name> in fetchers.py.
 SCRAPE_SOURCES = [
-    # name, label, company shown
-    # {"name": "scrape:catholicjobs",  "company": None, "fn": "fetch_catholicjobs"},
-    # {"name": "scrape:ewtn",          "company": "EWTN", "fn": "fetch_ewtn"},
-    # {"name": "scrape:osv",           "company": "Our Sunday Visitor", "fn": "fetch_osv"},
-    # {"name": "scrape:ignatius",      "company": "Ignatius Press", "fn": "fetch_ignatius"},
-    # {"name": "scrape:catholicanswers","company": "Catholic Answers", "fn": "fetch_catholic_answers"},
-    # {"name": "scrape:usccb",         "company": "USCCB", "fn": "fetch_usccb"},
-    # {"name": "scrape:relevantradio", "company": "Relevant Radio", "fn": "fetch_relevant_radio"},
+    {"name": "scrape:jobsforcatholics", "company": None,
+     "fn": "fetch_jobsforcatholics"},
+    # ----- DEFERRED (need Playwright or session-aware fetch) -----
+    # {"name": "scrape:gem-hallow",   "company": "Hallow",
+    #  "fn": "fetch_gem_hallow"},   # Hallow's Gem SPA — needs Playwright
+    # {"name": "scrape:catholicjobs", "company": None,
+    #  "fn": "fetch_catholicjobs"},
+    # {"name": "scrape:ewtn",         "company": "EWTN",
+    #  "fn": "fetch_ewtn"},
+    # {"name": "scrape:osv",          "company": "Our Sunday Visitor",
+    #  "fn": "fetch_osv"},
+    # {"name": "scrape:ignatius",     "company": "Ignatius Press",
+    #  "fn": "fetch_ignatius"},
+    # {"name": "scrape:catholicanswers", "company": "Catholic Answers",
+    #  "fn": "fetch_catholic_answers"},
+    # {"name": "scrape:usccb",        "company": "USCCB",
+    #  "fn": "fetch_usccb"},
+    # {"name": "scrape:relevantradio","company": "Relevant Radio",
+    #  "fn": "fetch_relevant_radio"},
     # Universities (lower priority — wire up once ATS sources are humming):
-    # {"name": "scrape:notredame",     "company": "University of Notre Dame", "fn": "fetch_notredame"},
-    # {"name": "scrape:catholicu",     "company": "Catholic University of America", "fn": "fetch_catholicu"},
-    # {"name": "scrape:bostoncollege", "company": "Boston College", "fn": "fetch_bostoncollege"},
-    # {"name": "scrape:georgetown",    "company": "Georgetown University", "fn": "fetch_georgetown"},
-    # {"name": "scrape:villanova",     "company": "Villanova University", "fn": "fetch_villanova"},
-    # {"name": "scrape:steubenville",  "company": "Franciscan University of Steubenville", "fn": "fetch_steubenville"},
-    # {"name": "scrape:avemaria",      "company": "Ave Maria University", "fn": "fetch_avemaria"},
-    # {"name": "scrape:stthomasmn",    "company": "University of St. Thomas (MN)", "fn": "fetch_stthomas_mn"},
-    # {"name": "scrape:stthomastx",    "company": "University of St. Thomas (TX)", "fn": "fetch_stthomas_tx"},
+    # {"name": "scrape:notredame",    "company": "University of Notre Dame",
+    #  "fn": "fetch_notredame"},
+    # {"name": "scrape:catholicu",    "company": "Catholic University of America",
+    #  "fn": "fetch_catholicu"},
+    # {"name": "scrape:bostoncollege","company": "Boston College",
+    #  "fn": "fetch_bostoncollege"},
+    # {"name": "scrape:georgetown",   "company": "Georgetown University",
+    #  "fn": "fetch_georgetown"},
+    # {"name": "scrape:villanova",    "company": "Villanova University",
+    #  "fn": "fetch_villanova"},
+    # {"name": "scrape:steubenville", "company": "Franciscan University of Steubenville",
+    #  "fn": "fetch_steubenville"},
+    # {"name": "scrape:avemaria",     "company": "Ave Maria University",
+    #  "fn": "fetch_avemaria"},
+    # {"name": "scrape:stthomasmn",   "company": "University of St. Thomas (MN)",
+    #  "fn": "fetch_stthomas_mn"},
+    # {"name": "scrape:stthomastx",   "company": "University of St. Thomas (TX)",
+    #  "fn": "fetch_stthomas_tx"},
 ]
